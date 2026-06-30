@@ -1,0 +1,13 @@
+{
+  "name": "quiz-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord de quiz automatique avec images générées via Canvas",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "@napi-rs/canvas": "^0.1.53"
+  }
+}

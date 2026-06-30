@@ -1,0 +1,338 @@
+[
+  {
+    "answer": "France",
+    "image": "assets/characters/france.jpg",
+    "difficulty": "facile",
+    "type": "Pays"
+  },
+  {
+    "answer": "Maroc",
+    "image": "assets/characters/maroc.jpg",
+    "difficulty": "facile",
+    "type": "Pays"
+  },
+  {
+    "answer": "Brésil",
+    "image": "assets/characters/bresil.jpg",
+    "difficulty": "facile",
+    "type": "Pays"
+  },
+  {
+    "answer": "Japon",
+    "image": "assets/characters/japon.jpg",
+    "difficulty": "facile",
+    "type": "Pays"
+  },
+  {
+    "answer": "Espagne",
+    "image": "assets/characters/espagne.jpg",
+    "difficulty": "facile",
+    "type": "Pays"
+  },
+  {
+    "answer": "Italie",
+    "image": "assets/characters/italie.jpg",
+    "difficulty": "facile",
+    "type": "Pays"
+  },
+  {
+    "answer": "Égypte",
+    "image": "assets/characters/egypte.jpg",
+    "difficulty": "moyen",
+    "type": "Pays"
+  },
+  {
+    "answer": "Argentine",
+    "image": "assets/characters/argentine.jpg",
+    "difficulty": "moyen",
+    "type": "Pays"
+  },
+  {
+    "answer": "Lionel Messi",
+    "image": "assets/characters/lionel_messi.jpg",
+    "difficulty": "facile",
+    "type": "Football"
+  },
+  {
+    "answer": "Cristiano Ronaldo",
+    "image": "assets/characters/cristiano_ronaldo.jpg",
+    "difficulty": "facile",
+    "type": "Football"
+  },
+  {
+    "answer": "Kylian Mbappé",
+    "image": "assets/characters/kylian_mbappe.jpg",
+    "difficulty": "facile",
+    "type": "Football"
+  },
+  {
+    "answer": "Neymar",
+    "image": "assets/characters/neymar.jpg",
+    "difficulty": "facile",
+    "type": "Football"
+  },
+  {
+    "answer": "Erling Haaland",
+    "image": "assets/characters/erling_haaland.jpg",
+    "difficulty": "moyen",
+    "type": "Football"
+  },
+  {
+    "answer": "Vinicius Junior",
+    "image": "assets/characters/vinicius_junior.jpg",
+    "difficulty": "moyen",
+    "type": "Football"
+  },
+  {
+    "answer": "Karim Benzema",
+    "image": "assets/characters/karim_benzema.jpg",
+    "difficulty": "moyen",
+    "type": "Football"
+  },
+  {
+    "answer": "Kevin De Bruyne",
+    "image": "assets/characters/kevin_de_bruyne.jpg",
+    "difficulty": "moyen",
+    "type": "Football"
+  },
+  {
+    "answer": "Mohamed Salah",
+    "image": "assets/characters/mohamed_salah.jpg",
+    "difficulty": "moyen",
+    "type": "Football"
+  },
+  {
+    "answer": "Achraf Hakimi",
+    "image": "assets/characters/achraf_hakimi.jpg",
+    "difficulty": "moyen",
+    "type": "Football"
+  },
+  {
+    "answer": "Luka Modric",
+    "image": "assets/characters/luka_modric.jpg",
+    "difficulty": "difficile",
+    "type": "Football"
+  },
+  {
+    "answer": "Jude Bellingham",
+    "image": "assets/characters/jude_bellingham.jpg",
+    "difficulty": "difficile",
+    "type": "Football"
+  },
+  {
+    "answer": "Leonardo DiCaprio",
+    "image": "assets/characters/leonardo_dicaprio.jpg",
+    "difficulty": "facile",
+    "type": "Cinéma"
+  },
+  {
+    "answer": "Tom Cruise",
+    "image": "assets/characters/tom_cruise.jpg",
+    "difficulty": "facile",
+    "type": "Cinéma"
+  },
+  {
+    "answer": "Will Smith",
+    "image": "assets/characters/will_smith.jpg",
+    "difficulty": "facile",
+    "type": "Cinéma"
+  },
+  {
+    "answer": "Dwayne Johnson",
+    "image": "assets/characters/dwayne_johnson.jpg",
+    "difficulty": "facile",
+    "type": "Cinéma"
+  },
+  {
+    "answer": "Robert Downey Jr.",
+    "image": "assets/characters/robert_downey_jr.jpg",
+    "difficulty": "moyen",
+    "type": "Cinéma"
+  },
+  {
+    "answer": "Margot Robbie",
+    "image": "assets/characters/margot_robbie.jpg",
+    "difficulty": "moyen",
+    "type": "Cinéma"
+  },
+  {
+    "answer": "Zendaya",
+    "image": "assets/characters/zendaya.jpg",
+    "difficulty": "moyen",
+    "type": "Cinéma"
+  },
+  {
+    "answer": "Timothée Chalamet",
+    "image": "assets/characters/timothee_chalamet.jpg",
+    "difficulty": "difficile",
+    "type": "Cinéma"
+  },
+  {
+    "answer": "Breaking Bad",
+    "image": "assets/characters/breaking_bad.jpg",
+    "difficulty": "facile",
+    "type": "Série"
+  },
+  {
+    "answer": "Stranger Things",
+    "image": "assets/characters/stranger_things.jpg",
+    "difficulty": "facile",
+    "type": "Série"
+  },
+  {
+    "answer": "Game of Thrones",
+    "image": "assets/characters/game_of_thrones.jpg",
+    "difficulty": "facile",
+    "type": "Série"
+  },
+  {
+    "answer": "The Boys",
+    "image": "assets/characters/the_boys.jpg",
+    "difficulty": "moyen",
+    "type": "Série"
+  },
+  {
+    "answer": "Casa de Papel",
+    "image": "assets/characters/money_heist.jpg",
+    "difficulty": "moyen",
+    "type": "Série"
+  },
+  {
+    "answer": "Peaky Blinders",
+    "image": "assets/characters/peaky_blinders.jpg",
+    "difficulty": "moyen",
+    "type": "Série"
+  },
+  {
+    "answer": "Mercredi",
+    "image": "assets/characters/wednesday.jpg",
+    "difficulty": "moyen",
+    "type": "Série"
+  },
+  {
+    "answer": "The Last of Us",
+    "image": "assets/characters/the_last_of_us.jpg",
+    "difficulty": "difficile",
+    "type": "Série"
+  },
+  {
+    "answer": "Naruto Uzumaki",
+    "image": "assets/characters/naruto_uzumaki.jpg",
+    "difficulty": "facile",
+    "type": "Anime"
+  },
+  {
+    "answer": "Monkey D. Luffy",
+    "image": "assets/characters/monkey_d_luffy.jpg",
+    "difficulty": "facile",
+    "type": "Anime"
+  },
+  {
+    "answer": "Son Goku",
+    "image": "assets/characters/son_goku.jpg",
+    "difficulty": "facile",
+    "type": "Anime"
+  },
+  {
+    "answer": "Sasuke Uchiha",
+    "image": "assets/characters/sasuke_uchiha.jpg",
+    "difficulty": "facile",
+    "type": "Anime"
+  },
+  {
+    "answer": "Tanjiro Kamado",
+    "image": "assets/characters/tanjiro_kamado.jpg",
+    "difficulty": "moyen",
+    "type": "Anime"
+  },
+  {
+    "answer": "Light Yagami",
+    "image": "assets/characters/light_yagami.jpg",
+    "difficulty": "moyen",
+    "type": "Anime"
+  },
+  {
+    "answer": "Edward Elric",
+    "image": "assets/characters/edward_elric.jpg",
+    "difficulty": "moyen",
+    "type": "Anime"
+  },
+  {
+    "answer": "Itachi Uchiha",
+    "image": "assets/characters/itachi_uchiha.jpg",
+    "difficulty": "difficile",
+    "type": "Anime"
+  },
+  {
+    "answer": "Levi Ackerman",
+    "image": "assets/characters/levi_ackerman.jpg",
+    "difficulty": "difficile",
+    "type": "Anime"
+  },
+  {
+    "answer": "Gojo Satoru",
+    "image": "assets/characters/gojo_satoru.jpg",
+    "difficulty": "difficile",
+    "type": "Anime"
+  },
+  {
+    "answer": "Saitama",
+    "image": "assets/characters/saitama.jpg",
+    "difficulty": "difficile",
+    "type": "Anime"
+  },
+  {
+    "answer": "Spike Spiegel",
+    "image": "assets/characters/spike_spiegel.jpg",
+    "difficulty": "difficile",
+    "type": "Anime"
+  },
+  {
+    "answer": "Lion",
+    "image": "assets/characters/lion.jpg",
+    "difficulty": "facile",
+    "type": "Animaux"
+  },
+  {
+    "answer": "Éléphant",
+    "image": "assets/characters/elephant.jpg",
+    "difficulty": "facile",
+    "type": "Animaux"
+  },
+  {
+    "answer": "Tigre",
+    "image": "assets/characters/tigre.jpg",
+    "difficulty": "facile",
+    "type": "Animaux"
+  },
+  {
+    "answer": "Panda",
+    "image": "assets/characters/panda.jpg",
+    "difficulty": "facile",
+    "type": "Animaux"
+  },
+  {
+    "answer": "Girafe",
+    "image": "assets/characters/girafe.jpg",
+    "difficulty": "facile",
+    "type": "Animaux"
+  },
+  {
+    "answer": "Requin blanc",
+    "image": "assets/characters/requin_blanc.jpg",
+    "difficulty": "moyen",
+    "type": "Animaux"
+  },
+  {
+    "answer": "Caméléon",
+    "image": "assets/characters/cameleon.jpg",
+    "difficulty": "moyen",
+    "type": "Animaux"
+  },
+  {
+    "answer": "Paresseux",
+    "image": "assets/characters/paresseux.jpg",
+    "difficulty": "difficile",
+    "type": "Animaux"
+  }
+]
