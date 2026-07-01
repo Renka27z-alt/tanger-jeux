@@ -14,10 +14,10 @@ const {
 
 // ====== CONFIGURATION ======
 const TOKEN = process.env.TOKEN;
-const OWNER_IDS = ['1289174457973211148', '320703657446211594'];   // ← Mets les 2 ID Discord ici
+const OWNER_IDS = ['1289174457973211148', '320703657446211594'];
 const QUIZ_CHANNEL_ID = '1519420268219596930';
 const LEADERBOARD_CHANNEL_ID = '1521251618119483532';
-const ANSWER_TIME_LIMIT = 60 * 1000;              // 1 minute pour répondre
+const ANSWER_TIME_LIMIT = 60 * 1000;
 // ============================
 
 const client = new Client({
@@ -33,7 +33,7 @@ let currentQuiz = null;
 let currentQuizMessage = null;
 let usedIndexes = [];
 let quizTimeout = null;
-let scheduleTimeout = null;   // timeout vers le prochain quart d'heure
+let scheduleTimeout = null;
 let quizRunning = false;
 let leaderboardMessage = null;
 let quizStartTime = null;
@@ -62,17 +62,12 @@ function pickQuiz() {
   return quizzes[index];
 }
 
-/**
- * Calcule le nombre de millisecondes jusqu'au prochain quart d'heure pile
- * (HH:00, HH:15, HH:30, HH:45).
- */
 function msUntilNextQuarter() {
   const now = new Date();
   const minutes = now.getMinutes();
   const seconds = now.getSeconds();
   const ms = now.getMilliseconds();
 
-  // Prochain multiple de 15 minutes
   const nextQuarterMinute = Math.ceil((minutes + seconds / 60 + ms / 60000) / 15) * 15;
   const diffMinutes = nextQuarterMinute - minutes;
   const diffMs = diffMinutes * 60 * 1000 - seconds * 1000 - ms;
@@ -153,10 +148,6 @@ async function revealAnswer(channel) {
   quizTimeout = null;
 }
 
-/**
- * Planifie le prochain quiz au prochain quart d'heure pile,
- * puis se rappelle elle-même pour le suivant, et ainsi de suite.
- */
 function scheduleNextQuiz() {
   if (!quizRunning) return;
 
@@ -166,14 +157,13 @@ function scheduleNextQuiz() {
 
   scheduleTimeout = setTimeout(async () => {
     await sendQuiz();
-    scheduleNextQuiz(); // planifie le suivant
+    scheduleNextQuiz();
   }, delay);
 }
 
 client.once('clientReady', async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
 
-  // Supprime TOUS les messages du salon leaderboard au démarrage
   if (LEADERBOARD_CHANNEL_ID && LEADERBOARD_CHANNEL_ID !== 'ID_DU_SALON_LEADERBOARD') {
     try {
       const lbChannel = await client.channels.fetch(LEADERBOARD_CHANNEL_ID);
@@ -197,15 +187,11 @@ client.once('clientReady', async () => {
   startQuizLoop();
 });
 
-/**
- * Démarre la boucle : envoie un quiz immédiatement,
- * puis planifie les suivants aux quarts d'heure exacts.
- */
 function startQuizLoop() {
   if (quizRunning) return;
   quizRunning = true;
-  sendQuiz();          // quiz immédiat au démarrage
-  scheduleNextQuiz();  // puis calé sur les quarts d'heure
+  sendQuiz();
+  scheduleNextQuiz();
 }
 
 async function stopQuizLoop() {
@@ -236,16 +222,12 @@ client.on('messageCreate', async (message) => {
 
   const content = message.content.trim().toLowerCase();
 
-  // ── Commandes accessibles à TOUT LE MONDE ──────────────────────────────
-
-  // -top
   if (content === '-top') {
     const embed = await buildLeaderboardEmbed(client);
     await message.channel.send({ embeds: [embed] });
     return;
   }
 
-  // -pointuser [@membre]
   if (content === '-pointuser' || content.startsWith('-pointuser ')) {
     const targetUser = message.mentions.users.first() || message.author;
     const stats = getUserStats(targetUser.id);
@@ -268,7 +250,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // -help
   if (content === '-help') {
     const embed = new EmbedBuilder()
       .setTitle('📖 Liste des commandes')
@@ -292,9 +273,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // ── Commandes réservées OWNER UNIQUEMENT ───────────────────────────────
-
-  // -addpoint
   if (content.startsWith('-addpoint')) {
     if (!isOwner(message.author.id)) {
       return message.reply('❌ Seul le owner peut utiliser cette commande.');
@@ -310,7 +288,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // -removepoint
   if (content.startsWith('-removepoint')) {
     if (!isOwner(message.author.id)) {
       return message.reply('❌ Seul le owner peut utiliser cette commande.');
@@ -326,7 +303,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // -resetpoint
   if (content.startsWith('-resetpoint')) {
     if (!isOwner(message.author.id)) {
       return message.reply('❌ Seul le owner peut utiliser cette commande.');
@@ -340,7 +316,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // -boutique
   if (content === '-boutique') {
     if (!isOwner(message.author.id)) {
       return message.reply('❌ Seul le owner peut utiliser cette commande.');
@@ -349,7 +324,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // -close
   if (content === '-close') {
     if (!isOwner(message.author.id)) {
       return message.reply('❌ Seul le owner peut fermer un ticket.');
@@ -369,7 +343,6 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // -quizz start / end (owner uniquement, dans le salon quiz)
   if (message.channel.id === QUIZ_CHANNEL_ID) {
     if (content === '-quizz start') {
       if (!isOwner(message.author.id)) {
@@ -378,7 +351,7 @@ client.on('messageCreate', async (message) => {
       if (!quizRunning) {
         startQuizLoop();
       } else {
-        await sendQuiz(); // quiz manuel immédiat sans casser le planning
+        await sendQuiz();
       }
       return;
     }
@@ -392,8 +365,6 @@ client.on('messageCreate', async (message) => {
       return;
     }
   }
-
-  // ── Détection des réponses au quiz ─────────────────────────────────────
 
   if (message.channel.id !== QUIZ_CHANNEL_ID) return;
   if (!currentQuiz) return;
@@ -446,14 +417,12 @@ client.on('interactionCreate', async (interaction) => {
   if (stats.points < requiredPoints) {
     return interaction.reply({
       content: `❌ Tu n'as pas assez de points ! Il te faut **${requiredPoints} pts** et tu en as **${stats.points}**.`,
-      flags: 64
+      ephemeral: true
     });
   }
 
-  await interaction.reply({
-    content: `✅ Achat en cours... **${rewardName}** pour **${requiredPoints} pts**`,
-    flags: 64
-  });
+  // On diffère la réponse pour avoir plus de temps (15 min au lieu de 3 sec)
+  await interaction.deferReply({ ephemeral: true });
 
   try {
     const member = await interaction.guild.members.fetch(interaction.user.id);
