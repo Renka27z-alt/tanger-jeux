@@ -433,11 +433,10 @@ client.on('interactionCreate', async (interaction) => {
       addPoint(interaction.user.id, interaction.user.username);
     }
 
-    await updateLeaderboardEmbed();
-
     const [ticket] = await Promise.all([
       createTicket(interaction.guild, member, rewardName, requiredPoints),
-      giveTempRole(member, roleId)
+      giveTempRole(member, roleId),
+      updateLeaderboardEmbed()
     ]);
 
     await interaction.editReply({
