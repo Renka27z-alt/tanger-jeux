@@ -21,11 +21,6 @@ const BACKGROUND_PATH = path.join(__dirname, 'assets', 'background.png');
 const WIDTH = 800;
 const HEIGHT = 1000;
 
-/**
- * Télécharge une image depuis une URL en Buffer, avec un User-Agent
- * identifiable (certains hébergeurs bloquent les requêtes sans en-tête
- * User-Agent reconnaissable). Suit automatiquement les redirections.
- */
 function downloadImage(url, redirectCount = 0) {
   return new Promise((resolve, reject) => {
     if (redirectCount > 5) {
@@ -41,7 +36,6 @@ function downloadImage(url, redirectCount = 0) {
         }
       },
       (res) => {
-        // Suit les redirections (301/302/303/307/308)
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           res.resume();
           return resolve(downloadImage(res.headers.location, redirectCount + 1));
@@ -73,13 +67,6 @@ function downloadImage(url, redirectCount = 0) {
   });
 }
 
-
-/**
- * Exécute `fn` (une fonction qui retourne une Promise) et réessaie
- * automatiquement, avec un délai croissant, si l'erreur rejetée a
- * la propriété `rateLimited`. Utilisé pour le téléchargement d'images
- * via URL directe (les images locales n'en ont pas besoin).
- */
 async function withRateLimitRetry(fn, label, maxRetries = 3) {
   let lastErr;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -88,7 +75,7 @@ async function withRateLimitRetry(fn, label, maxRetries = 3) {
     } catch (e) {
       lastErr = e;
       if (!e.rateLimited || attempt === maxRetries) break;
-      const waitMs = 3000 * Math.pow(2, attempt); // 3s, 6s, 12s, ...
+      const waitMs = 3000 * Math.pow(2, attempt);
       console.warn(`[IMG] Rate-limit pour "${label}", nouvel essai dans ${waitMs}ms...`);
       await new Promise((res) => setTimeout(res, waitMs));
     }
@@ -100,13 +87,7 @@ function downloadImageWithRetry(url, maxRetries = 3) {
   return withRateLimitRetry(() => downloadImage(url), url, maxRetries);
 }
 
-/**
- * Charge une image (perso ou fond), qu'elle soit :
- * - une URL (http/https) → téléchargée manuellement (User-Agent + redirections gérées)
- * - un chemin local → lu en Buffer
- */
 async function loadImageFlexible(imagePath) {
-  // Cache hit → on réutilise le Buffer déjà téléchargé
   if (imageCache.has(imagePath)) {
     return loadImage(imageCache.get(imagePath));
   }
@@ -123,16 +104,7 @@ async function loadImageFlexible(imagePath) {
   return loadImage(fs.readFileSync(absolutePath));
 }
 
-/**
- * Pré-charge toutes les images des quiz au démarrage.
- * Retourne la liste des quiz dont l'image a été chargée avec succès.
- * Les quiz en échec sont ignorés (pas dans la liste retournée).
- */
 async function preloadAllImages(quizList) {
-  // Toutes les images sont désormais censées être des fichiers locaux
-  // (dans assets/characters/), donc le chargement est quasi instantané.
-  // On garde le support des URLs directes (http/https) par souplesse,
-  // mais ce n'est plus le cas d'usage principal.
   console.log(`[PRELOAD] Chargement de ${quizList.length} images...`);
 
   const valid = [];
@@ -163,24 +135,10 @@ async function preloadAllImages(quizList) {
   return valid;
 }
 
-/**
- * Génère le buffer PNG de l'image du quiz, façon "carte de quiz" :
- * bandeau titre, ligne de stats (difficulté / catégorie / récompense / temps),
- * puis la grande image à deviner.
- *
- * @param {Object} quiz
- * @param {string} quiz.answer     - Réponse attendue (non affichée)
- * @param {string} quiz.image      - Chemin local ou URL de l'image du personnage
- * @param {string} quiz.difficulty - "facile" | "moyen" | "difficile"
- * @param {string} quiz.type       - "Anime", "Série", "Film", ...
- * @param {string} [quiz.reward]   - Texte de récompense (ex: "400 coins")
- * @param {number} [timeLimitMs]   - Temps imparti en ms (affiché dans la case TEMPS)
- */
 async function generateQuizImage(quiz, timeLimitMs = 60000) {
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext('2d');
 
-  // 1. Fond : assets/background.jpg si présent, sinon fond généré "Maroc"
   try {
     const bgImg = await loadImageFlexible(BACKGROUND_PATH);
     drawImageCover(ctx, bgImg, 0, 0, WIDTH, HEIGHT, 0.5);
@@ -188,7 +146,6 @@ async function generateQuizImage(quiz, timeLimitMs = 60000) {
     drawBackground(ctx, WIDTH, HEIGHT);
   }
 
-  // Voile sombre léger
   ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
@@ -202,7 +159,7 @@ async function generateQuizImage(quiz, timeLimitMs = 60000) {
   drawGamepadIcon(ctx, margin + 60, margin + titleH / 2, 28, '#ffffff');
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 42px Sans';
+  ctx.font = 'bold 42px Arial';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText('QUIZ CHALLENGE', margin + 115, margin + titleH / 2);
@@ -250,13 +207,13 @@ async function generateQuizImage(quiz, timeLimitMs = 60000) {
     stat.icon(cx, iconCy);
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.font = 'bold 15px Sans';
+    ctx.font = 'bold 15px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(stat.label, cx, statsY + 105);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 21px Sans';
+    ctx.font = 'bold 21px Arial';
     ctx.fillText(stat.value, cx, statsY + 134);
   });
 
@@ -281,14 +238,12 @@ async function generateQuizImage(quiz, timeLimitMs = 60000) {
   return canvas.toBuffer('image/png');
 }
 
-/** Formate un temps en ms en texte court ("60s" -> "1 min", "30000" -> "30s") */
 function formatTime(ms) {
   if (ms < 60000) return `${Math.round(ms / 1000)}s`;
   const minutes = Math.round(ms / 60000);
   return `${minutes} min`;
 }
 
-/** Convertit une couleur hex (#rrggbb) en rgba avec une opacité donnée */
 function hexToRgba(hex, alpha) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -296,7 +251,6 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/** Carte translucide avec contour rose, façon "Quiz Challenge" */
 function drawCard(ctx, x, y, w, h) {
   ctx.save();
   roundRect(ctx, x, y, w, h, 20);
@@ -308,18 +262,15 @@ function drawCard(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-/** Icône manette de jeu (simple, vectorielle) */
 function drawGamepadIcon(ctx, cx, cy, size, color) {
   ctx.save();
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 4;
 
-  // Corps de la manette
   roundRect(ctx, cx - size, cy - size * 0.5, size * 2, size, size * 0.5);
   ctx.stroke();
 
-  // Boutons (droite)
   ctx.beginPath();
   ctx.arc(cx + size * 0.45, cy - size * 0.05, size * 0.12, 0, Math.PI * 2);
   ctx.fill();
@@ -327,7 +278,6 @@ function drawGamepadIcon(ctx, cx, cy, size, color) {
   ctx.arc(cx + size * 0.75, cy + size * 0.2, size * 0.12, 0, Math.PI * 2);
   ctx.fill();
 
-  // Croix directionnelle (gauche)
   ctx.beginPath();
   ctx.moveTo(cx - size * 0.75, cy);
   ctx.lineTo(cx - size * 0.45, cy);
@@ -338,7 +288,6 @@ function drawGamepadIcon(ctx, cx, cy, size, color) {
   ctx.restore();
 }
 
-/** Icône éclair (difficulté) dans un cercle coloré */
 function drawLightningIcon(ctx, cx, cy, r, color) {
   drawIconBackground(ctx, cx, cy, r, color);
 
@@ -355,7 +304,6 @@ function drawLightningIcon(ctx, cx, cy, r, color) {
   ctx.fill();
 }
 
-/** Icône étoile (catégorie) dans un cercle coloré */
 function drawStarIcon(ctx, cx, cy, r, color) {
   drawIconBackground(ctx, cx, cy, r, color);
 
@@ -376,7 +324,6 @@ function drawStarIcon(ctx, cx, cy, r, color) {
   ctx.fill();
 }
 
-/** Icône pièce/coin (récompense) dans un cercle coloré */
 function drawCoinIcon(ctx, cx, cy, r, color) {
   drawIconBackground(ctx, cx, cy, r, color);
 
@@ -387,13 +334,12 @@ function drawCoinIcon(ctx, cx, cy, r, color) {
   ctx.stroke();
 
   ctx.fillStyle = color;
-  ctx.font = `bold ${Math.round(r * 0.7)}px Sans`;
+  ctx.font = `bold ${Math.round(r * 0.7)}px Arial`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('C', cx, cy + 1);
 }
 
-/** Icône horloge (temps) dans un cercle coloré */
 function drawClockIcon(ctx, cx, cy, r, color) {
   drawIconBackground(ctx, cx, cy, r, color);
 
@@ -403,7 +349,6 @@ function drawClockIcon(ctx, cx, cy, r, color) {
   ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Aiguilles
   ctx.beginPath();
   ctx.moveTo(cx, cy);
   ctx.lineTo(cx, cy - r * 0.35);
@@ -412,7 +357,6 @@ function drawClockIcon(ctx, cx, cy, r, color) {
   ctx.stroke();
 }
 
-/** Cercle de fond translucide commun à toutes les icônes de stats */
 function drawIconBackground(ctx, cx, cy, r, color) {
   ctx.save();
   ctx.beginPath();
@@ -425,27 +369,6 @@ function drawIconBackground(ctx, cx, cy, r, color) {
   ctx.restore();
 }
 
-/**
- * Dessine une image en mode "cover" (recadrée pour remplir la zone
- * sans déformation).
- */
-/**
- * Dessine `img` dans le rectangle (dx, dy, dWidth, dHeight) en mode "cover"
- * (remplit tout le cadre, recadre l'excédent), comme CSS `object-fit: cover`.
- *
- * Contrairement à un cover centré classique, le recadrage VERTICAL est
- * biaisé vers le HAUT de l'image plutôt que le centre strict : sur des
- * jaquettes/posters de personnages (mangas, jeux, séries), le visage/perso
- * se trouve presque toujours dans le tiers supérieur, et le titre/logo/texte
- * dans le tiers inférieur. Favoriser le haut limite fortement les cas où le
- * visage est coupé ou où seul le texte du bas reste visible.
- *
- * focusY contrôle ce biais : 0 = haut de l'image, 0.5 = centre (comportement
- * classique), 1 = bas. Par défaut 0.15 (fortement vers le haut) car les
- * jaquettes/posters mettent souvent le titre/logo dans le dernier quart de
- * l'image. Le recadrage HORIZONTAL reste centré (la plupart des
- * personnages sont déjà à peu près centrés horizontalement).
- */
 function drawImageCover(ctx, img, dx, dy, dWidth, dHeight, focusY = 0.15) {
   const imgRatio = img.width / img.height;
   const targetRatio = dWidth / dHeight;
@@ -461,7 +384,6 @@ function drawImageCover(ctx, img, dx, dy, dWidth, dHeight, focusY = 0.15) {
     sWidth = img.width;
     sHeight = sWidth / targetRatio;
     sx = 0;
-    // Centrage vertical biaisé vers le haut au lieu d'un centrage strict.
     const maxSy = img.height - sHeight;
     sy = maxSy * focusY;
   }
@@ -469,7 +391,6 @@ function drawImageCover(ctx, img, dx, dy, dWidth, dHeight, focusY = 0.15) {
   ctx.drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
 }
 
-/** Trace un rectangle aux coins arrondis (path uniquement, fill/stroke à part) */
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
