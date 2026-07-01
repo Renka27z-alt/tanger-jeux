@@ -434,9 +434,11 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     await updateLeaderboardEmbed();
-    await giveTempRole(member, roleId);
 
-    const ticket = await createTicket(interaction.guild, member, rewardName, requiredPoints);
+    const [ticket] = await Promise.all([
+      createTicket(interaction.guild, member, rewardName, requiredPoints),
+      giveTempRole(member, roleId)
+    ]);
 
     await interaction.editReply({
       content: `✅ Achat validé ! **${requiredPoints} pts** ont été déduits.\n🎫 Ton ticket a été créé : ${ticket}\n⏳ Ton rôle **${rewardName}** expire dans 5 minutes.`
