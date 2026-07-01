@@ -446,13 +446,13 @@ client.on('interactionCreate', async (interaction) => {
   if (stats.points < requiredPoints) {
     return interaction.reply({
       content: `❌ Tu n'as pas assez de points ! Il te faut **${requiredPoints} pts** et tu en as **${stats.points}**.`,
-      ephemeral: true
+      flags: 64
     });
   }
 
   await interaction.reply({
     content: `✅ Achat en cours... **${rewardName}** pour **${requiredPoints} pts**`,
-    ephemeral: true
+    flags: 64
   });
 
   try {
