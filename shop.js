@@ -10,8 +10,8 @@ const { getUserStats } = require('./points');
 
 // ====== CONFIG BOUTIQUE ======
 const ROLE_OWNER_ID      = '1518406883139125369';
-const ROLE_NITRO_ID      = '1518415288868016250';
-const ROLE_DECO_ID       = '1518415536134946989';
+const ROLE_NITRO_ID      = '1521813246846177380';
+const ROLE_DECO_ID       = '1521817454051983500';
 const TICKET_CATEGORY_ID = '1521810036915965962';  // ← remplace par l'ID de ta catégorie tickets
 const POINTS_DECO        = 80;
 const POINTS_NITRO       = 120;
