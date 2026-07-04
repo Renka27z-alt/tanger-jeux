@@ -13,8 +13,8 @@ const ROLE_OWNER_ID      = '1518406883139125369';
 const ROLE_NITRO_ID      = '1521813246846177380';
 const ROLE_DECO_ID       = '1521817454051983500';
 const TICKET_CATEGORY_ID = '1521810036915965962';
-const POINTS_DECO        = 80;
-const POINTS_NITRO       = 120;
+const POINTS_DECO        = 250;
+const POINTS_NITRO       = 500;
 const TEMPROLE_DURATION  = 120 * 60 * 1000; // 2 heures
 // ============================
 
