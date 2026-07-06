@@ -288,7 +288,7 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  if (content.startsWith('-removepoint')) {
+  if (content.startsWith('-remove point')) {
     if (!isOwner(message.author.id)) {
       return message.reply('❌ Seul le owner peut utiliser cette commande.');
     }
