@@ -2,7 +2,9 @@ process.env.TZ = 'Europe/Paris';
 
 const { Client, GatewayIntentBits, AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const { generateQuizImage, preloadAllImages } = require('./generateImage');
+const { generateQuestionImage } = require('./generateImage');
 let quizzes = require('./quizzes.json');
+const { QUESTIONS } = require('./questions');
 const { addPoint, addPoints, removePoints, getUserStats, resetPoints } = require('./points');
 const { buildLeaderboardEmbed } = require('./leaderboard');
 const {
@@ -14,11 +16,35 @@ const {
 
 // ====== CONFIGURATION ======
 const TOKEN = process.env.TOKEN;
-const OWNER_IDS = ['1289174457973211148', '1127748076120055890'];
+const OWNER_IDS = ['1289174457973211148', '1127748076120055890']; // ← tes 2 IDs owner
 const QUIZ_CHANNEL_ID = '1519420268219596930';
 const LEADERBOARD_CHANNEL_ID = '1521251618119483532';
 const ANSWER_TIME_LIMIT = 60 * 1000;
 // ============================
+
+// ====== MODE BOSS ======
+const BOSS_TARGET_ID = '1277003171969106054';
+const BOSS_TAUNT_MESSAGES = [
+  "nah t'as cru c'était fini ? question boss pour toi",
+  "bro elle trouve encore... non c'est mort réponds à ça d'abord",
+  "trop forte la fille on peut pas laisser passer ça",
+  "t'as trouvé ok mais c'est pas suffisant question spéciale",
+  "le bot t'a repérée question difficile en route",
+  "elle abuse vraiment faut que ça s'arrête question boss",
+  "c'est cheaté là sérieux réponds à ça d'abord",
+  "non non non pas si vite question spéciale activée",
+];
+const BOSS_QUESTIONS = [
+  { question: "Quelle est la capitale de l'Australie ?", answer: "canberra", hint: "c'est pas Sydney ni Melbourne" },
+  { question: "En quelle année la Tour Eiffel a-t-elle été construite ?", answer: "1889", hint: "fin du 19ème siècle" },
+  { question: "Combien de pays composent l'Union Européenne ?", answer: "27", hint: "après le Brexit" },
+  { question: "Quel pays a la plus grande superficie au monde ?", answer: "russie", hint: "c'est en Europe/Asie" },
+  { question: "Quelle est la formule chimique du sel de table ?", answer: "nacl", hint: "sodium + chlore" },
+  { question: "Qui a inventé le téléphone ?", answer: "bell", hint: "Alexander Graham..." },
+  { question: "Quelle est la planète la plus proche du soleil ?", answer: "mercure", hint: "première planète du système solaire" },
+];
+let bossMode = { active: false, pendingQuiz: null, question: null, timeoutId: null };
+// =======================
 
 const client = new Client({
   intents: [
@@ -38,6 +64,13 @@ let quizRunning = false;
 let leaderboardMessage = null;
 let quizStartTime = null;
 
+// ====== QUIZ QUESTIONS TEXTE ======
+let currentQuestion = null;
+let currentQuestionMessage = null;
+let questionTimeout = null;
+let usedQuestionIndexes = [];
+// ==================================
+
 function isOwner(userId) {
   return OWNER_IDS.includes(userId);
 }
@@ -52,14 +85,22 @@ function normalize(str) {
 
 function pickQuiz() {
   if (usedIndexes.length >= quizzes.length) usedIndexes = [];
-
   let index;
   do {
     index = Math.floor(Math.random() * quizzes.length);
   } while (usedIndexes.includes(index));
-
   usedIndexes.push(index);
   return quizzes[index];
+}
+
+function pickQuestion() {
+  if (usedQuestionIndexes.length >= QUESTIONS.length) usedQuestionIndexes = [];
+  let index;
+  do {
+    index = Math.floor(Math.random() * QUESTIONS.length);
+  } while (usedQuestionIndexes.includes(index));
+  usedQuestionIndexes.push(index);
+  return QUESTIONS[index];
 }
 
 function msUntilNextQuarter() {
@@ -67,50 +108,31 @@ function msUntilNextQuarter() {
   const minutes = now.getMinutes();
   const seconds = now.getSeconds();
   const ms = now.getMilliseconds();
-
   const nextQuarterMinute = Math.ceil((minutes + seconds / 60 + ms / 60000) / 15) * 15;
   const diffMinutes = nextQuarterMinute - minutes;
-  const diffMs = diffMinutes * 60 * 1000 - seconds * 1000 - ms;
-
-  return diffMs;
+  return diffMinutes * 60 * 1000 - seconds * 1000 - ms;
 }
 
 async function updateLeaderboardEmbed() {
   if (!LEADERBOARD_CHANNEL_ID || LEADERBOARD_CHANNEL_ID === 'ID_DU_SALON_LEADERBOARD') return;
-
   try {
     const channel = await client.channels.fetch(LEADERBOARD_CHANNEL_ID);
     const embed = await buildLeaderboardEmbed(client);
-
     if (leaderboardMessage) {
-      try {
-        await leaderboardMessage.edit({ embeds: [embed] });
-        return;
-      } catch (e) {
-        leaderboardMessage = null;
-      }
+      try { await leaderboardMessage.edit({ embeds: [embed] }); return; }
+      catch (e) { leaderboardMessage = null; }
     }
-
     leaderboardMessage = await channel.send({ embeds: [embed] });
   } catch (err) {
-    console.error('[LEADERBOARD] Erreur lors de la mise à jour de l\'embed :', err);
+    console.error('[LEADERBOARD] Erreur :', err);
   }
 }
 
 async function sendQuiz() {
   try {
     const channel = await client.channels.fetch(QUIZ_CHANNEL_ID);
-
-    if (quizTimeout) {
-      clearTimeout(quizTimeout);
-      quizTimeout = null;
-    }
-
-    if (currentQuizMessage) {
-      try {
-        await currentQuizMessage.delete();
-      } catch (e) {}
-    }
+    if (quizTimeout) { clearTimeout(quizTimeout); quizTimeout = null; }
+    if (currentQuizMessage) { try { await currentQuizMessage.delete(); } catch (e) {} }
 
     currentQuiz = pickQuiz();
     const buffer = await generateQuizImage(currentQuiz, ANSWER_TIME_LIMIT);
@@ -118,43 +140,78 @@ async function sendQuiz() {
 
     currentQuizMessage = await channel.send({ files: [attachment] });
     quizStartTime = Date.now();
-    console.log(`[QUIZ] Nouveau quiz envoyé à ${new Date().toLocaleTimeString()}. Réponse : ${currentQuiz.answer}`);
-
+    console.log(`[QUIZ] Envoyé à ${new Date().toLocaleTimeString()}. Réponse : ${currentQuiz.answer}`);
     quizTimeout = setTimeout(() => revealAnswer(channel), ANSWER_TIME_LIMIT);
   } catch (err) {
-    console.error('[QUIZ] Erreur lors de l\'envoi du quiz :', err);
+    console.error('[QUIZ] Erreur envoi :', err);
   }
 }
 
 async function revealAnswer(channel) {
   if (!currentQuiz) return;
-
   const answer = currentQuiz.answer;
-
   if (currentQuizMessage) {
-    try {
-      await currentQuizMessage.delete();
-    } catch (e) {}
+    try { await currentQuizMessage.delete(); } catch (e) {}
     currentQuizMessage = null;
   }
-
   try {
-    await channel.send(`⏰ Temps écoulé ! La réponse était : **${answer}**`);
-  } catch (e) {
-    console.error('[QUIZ] Erreur lors de l\'envoi du message de fin de temps :', e);
-  }
-
+    const revealMsg = await channel.send(`⏰ Temps écoulé ! La réponse était : **${answer}**`);
+    setTimeout(() => revealMsg.delete().catch(() => {}), 10000);
+  } catch (e) {}
   currentQuiz = null;
   quizTimeout = null;
 }
 
+async function sendQuestion() {
+  try {
+    const channel = await client.channels.fetch(QUIZ_CHANNEL_ID);
+    if (questionTimeout) { clearTimeout(questionTimeout); questionTimeout = null; }
+    if (currentQuestionMessage) { try { await currentQuestionMessage.delete(); } catch (e) {} }
+
+    currentQuestion = pickQuestion();
+
+    // Génère une image avec la question écrite dessus sur le fond background
+    let buffer;
+    try {
+      buffer = await generateQuestionImage(currentQuestion.question, ANSWER_TIME_LIMIT);
+    } catch (e) {
+      // Si generateQuestionImage n'existe pas encore, envoie en texte simple
+      currentQuestionMessage = await channel.send(
+        `❓ **QUESTION** *(60 secondes pour répondre)*\n\n**${currentQuestion.question}**`
+      );
+      questionTimeout = setTimeout(() => revealQuestion(channel), ANSWER_TIME_LIMIT);
+      return;
+    }
+
+    const attachment = new AttachmentBuilder(buffer, { name: 'question.png' });
+    currentQuestionMessage = await channel.send({ files: [attachment] });
+    console.log(`[QST] Question envoyée. Réponse : ${currentQuestion.answers[0]}`);
+    questionTimeout = setTimeout(() => revealQuestion(channel), ANSWER_TIME_LIMIT);
+  } catch (err) {
+    console.error('[QST] Erreur envoi :', err);
+  }
+}
+
+async function revealQuestion(channel) {
+  if (!currentQuestion) return;
+  const answer = currentQuestion.answers[0];
+  if (currentQuestionMessage) {
+    try { await currentQuestionMessage.delete(); } catch (e) {}
+    currentQuestionMessage = null;
+  }
+  try {
+    const revealMsg = await channel.send(`⏰ Temps écoulé ! La réponse était : **${answer}**`);
+    setTimeout(() => revealMsg.delete().catch(() => {}), 10000);
+  } catch (e) {}
+  currentQuestion = null;
+  questionTimeout = null;
+}
+
 function scheduleNextQuiz() {
   if (!quizRunning) return;
-
   const delay = msUntilNextQuarter();
   const nextTime = new Date(Date.now() + delay);
-  console.log(`[QUIZ] Prochain quiz planifié à ${nextTime.toLocaleTimeString()} (dans ${Math.round(delay / 1000)}s)`);
-
+  console.log(`[QUIZ] Prochain quiz à ${nextTime.toLocaleTimeString()} (dans ${Math.round(delay / 1000)}s)`);
   scheduleTimeout = setTimeout(async () => {
     await sendQuiz();
     scheduleNextQuiz();
@@ -173,15 +230,13 @@ client.once('clientReady', async () => {
         if (fetched.size === 0) break;
         await lbChannel.bulkDelete(fetched, true);
       } while (fetched.size >= 2);
-      console.log(`[LEADERBOARD] Salon nettoyé au démarrage.`);
-    } catch (e) {
-      console.error('[LEADERBOARD] Erreur lors du nettoyage :', e);
-    }
+      console.log(`[LEADERBOARD] Salon nettoyé.`);
+    } catch (e) { console.error('[LEADERBOARD] Erreur nettoyage :', e); }
   }
 
   quizzes = await preloadAllImages(quizzes);
   if (quizzes.length === 0) {
-    console.error('[PRELOAD] Aucune image disponible, le bot ne peut pas démarrer.');
+    console.error('[PRELOAD] Aucune image disponible.');
     return;
   }
   startQuizLoop();
@@ -196,32 +251,17 @@ function startQuizLoop() {
 
 async function stopQuizLoop() {
   quizRunning = false;
-
-  if (scheduleTimeout) {
-    clearTimeout(scheduleTimeout);
-    scheduleTimeout = null;
-  }
-
-  if (quizTimeout) {
-    clearTimeout(quizTimeout);
-    quizTimeout = null;
-  }
-
-  if (currentQuizMessage) {
-    try {
-      await currentQuizMessage.delete();
-    } catch (e) {}
-    currentQuizMessage = null;
-  }
-
+  if (scheduleTimeout) { clearTimeout(scheduleTimeout); scheduleTimeout = null; }
+  if (quizTimeout) { clearTimeout(quizTimeout); quizTimeout = null; }
+  if (currentQuizMessage) { try { await currentQuizMessage.delete(); } catch (e) {} currentQuizMessage = null; }
   currentQuiz = null;
 }
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-
   const content = message.content.trim().toLowerCase();
 
+  // ── Commandes tout le monde ──────────────────────────────
   if (content === '-top') {
     const embed = await buildLeaderboardEmbed(client);
     await message.channel.send({ embeds: [embed] });
@@ -231,21 +271,15 @@ client.on('messageCreate', async (message) => {
   if (content === '-pointuser' || content.startsWith('-pointuser ')) {
     const targetUser = message.mentions.users.first() || message.author;
     const stats = getUserStats(targetUser.id);
-
     const embed = new EmbedBuilder()
       .setTitle(`📊 Stats de ${targetUser.username}`)
       .setColor('#3498db')
       .setThumbnail(targetUser.displayAvatarURL({ size: 256 }))
       .addFields(
         { name: 'Points', value: `${stats.points}`, inline: true },
-        {
-          name: 'Position',
-          value: stats.rank ? `#${stats.rank} / ${stats.total}` : 'Non classé',
-          inline: true
-        }
+        { name: 'Position', value: stats.rank ? `#${stats.rank} / ${stats.total}` : 'Non classé', inline: true }
       )
       .setTimestamp();
-
     await message.channel.send({ embeds: [embed] });
     return;
   }
@@ -255,48 +289,45 @@ client.on('messageCreate', async (message) => {
       .setTitle('📖 Liste des commandes')
       .setColor('#9b59b6')
       .addFields(
-        { name: '-top', value: 'Affiche le classement (TOP 5) des joueurs.' },
-        { name: '-pointuser', value: 'Affiche tes propres points et ta position.' },
-        { name: '-pointuser @membre', value: 'Affiche les points et la position d\'un autre membre.' },
-        { name: '-boutique', value: 'Poste l\'embed boutique (owner).' },
-        { name: '-quizz start', value: 'Lance un quiz immédiatement (owner).' },
-        { name: '-quizz end', value: 'Arrête le quiz en cours (owner).' },
-        { name: '-addpoint @membre [montant]', value: 'Ajoute X points à un membre (owner).' },
-        { name: '-removepoint @membre [montant]', value: 'Retire X points à un membre (owner).' },
-        { name: '-resetpoint @membre', value: 'Remet les points d\'un membre à 0 (owner).' },
-        { name: '-close', value: 'Ferme et supprime un ticket (owner).' },
+        { name: '-top', value: 'Affiche le classement.' },
+        { name: '-pointuser', value: 'Affiche tes points.' },
+        { name: '-pointuser @membre', value: 'Affiche les points d\'un membre.' },
+        { name: '-boutique', value: 'Poste la boutique (owner).' },
+        { name: '-quizz start', value: 'Lance un quiz image (owner).' },
+        { name: '-quizz end', value: 'Arrête le quiz (owner).' },
+        { name: '-qst start', value: 'Lance une question texte (owner).' },
+        { name: '-addpoint @membre [montant]', value: 'Ajoute des points (owner).' },
+        { name: '-removepoint @membre [montant]', value: 'Retire des points (owner).' },
+        { name: '-resetpoint @membre', value: 'Remet les points à 0 (owner).' },
+        { name: '-close', value: 'Ferme un ticket (owner).' },
         { name: '-help', value: 'Affiche ce message.' }
       )
       .setTimestamp();
-
     await message.channel.send({ embeds: [embed] });
     return;
   }
 
+  // ── Commandes owner uniquement ───────────────────────────
   if (content.startsWith('-addpoint')) {
-    if (!isOwner(message.author.id)) {
-      return message.reply('❌ Seul le owner peut utiliser cette commande.');
-    }
+    if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut utiliser cette commande.');
     const targetUser = message.mentions.users.first();
     if (!targetUser) return message.reply('❌ Utilisation : `-addpoint @membre [montant]`');
     const parts = message.content.trim().split(/\s+/);
     const amount = parseInt(parts[parts.length - 1]);
-    if (isNaN(amount) || amount <= 0) return message.reply('❌ Précise un montant valide. Ex: `-addpoint @membre 5`');
+    if (isNaN(amount) || amount <= 0) return message.reply('❌ Montant invalide.');
     const newTotal = addPoints(targetUser.id, targetUser.username, amount);
     await updateLeaderboardEmbed();
     await message.channel.send(`✅ **+${amount} points** ajoutés à **${targetUser.username}**. Total : **${newTotal} pts**`);
     return;
   }
 
-  if (content.startsWith('-remove point')) {
-    if (!isOwner(message.author.id)) {
-      return message.reply('❌ Seul le owner peut utiliser cette commande.');
-    }
+  if (content.startsWith('-removepoint')) {
+    if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut utiliser cette commande.');
     const targetUser = message.mentions.users.first();
     if (!targetUser) return message.reply('❌ Utilisation : `-removepoint @membre [montant]`');
     const parts = message.content.trim().split(/\s+/);
     const amount = parseInt(parts[parts.length - 1]);
-    if (isNaN(amount) || amount <= 0) return message.reply('❌ Précise un montant valide. Ex: `-removepoint @membre 5`');
+    if (isNaN(amount) || amount <= 0) return message.reply('❌ Montant invalide.');
     const newTotal = removePoints(targetUser.id, targetUser.username, amount);
     await updateLeaderboardEmbed();
     await message.channel.send(`✅ **-${amount} points** retirés à **${targetUser.username}**. Total : **${newTotal} pts**`);
@@ -304,106 +335,171 @@ client.on('messageCreate', async (message) => {
   }
 
   if (content.startsWith('-resetpoint')) {
-    if (!isOwner(message.author.id)) {
-      return message.reply('❌ Seul le owner peut utiliser cette commande.');
-    }
+    if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut utiliser cette commande.');
     const targetUser = message.mentions.users.first();
     if (!targetUser) return message.reply('❌ Utilisation : `-resetpoint @membre`');
     const existed = resetPoints(targetUser.id);
-    if (!existed) return message.reply(`❌ ${targetUser.username} n'a aucun point enregistré.`);
+    if (!existed) return message.reply(`❌ ${targetUser.username} n'a aucun point.`);
     await updateLeaderboardEmbed();
     await message.channel.send(`✅ Les points de **${targetUser.username}** ont été remis à 0.`);
     return;
   }
 
   if (content === '-boutique') {
-    if (!isOwner(message.author.id)) {
-      return message.reply('❌ Seul le owner peut utiliser cette commande.');
-    }
+    if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut utiliser cette commande.');
     await sendShopEmbed(message.channel);
     return;
   }
 
   if (content === '-close') {
-    if (!isOwner(message.author.id)) {
-      return message.reply('❌ Seul le owner peut fermer un ticket.');
-    }
+    if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut fermer un ticket.');
     const channel = message.channel;
-    if (!channel.name.startsWith('ticket-')) {
-      return message.reply('❌ Cette commande ne peut être utilisée que dans un ticket.');
-    }
-    await channel.send('🔒 Ticket fermé. Ce salon sera supprimé dans **5 secondes**...');
-    setTimeout(async () => {
-      try {
-        await channel.delete('Ticket fermé via -close');
-      } catch (e) {
-        console.error('[CLOSE] Erreur lors de la suppression du ticket :', e);
-      }
-    }, 5000);
+    if (!channel.name.startsWith('ticket-')) return message.reply('❌ Uniquement dans un ticket.');
+    await channel.send('🔒 Ticket fermé. Suppression dans **5 secondes**...');
+    setTimeout(async () => { try { await channel.delete(); } catch (e) {} }, 5000);
     return;
   }
 
+  // ── Commandes dans le salon quiz ─────────────────────────
   if (message.channel.id === QUIZ_CHANNEL_ID) {
+
     if (content === '-quizz start') {
-      if (!isOwner(message.author.id)) {
-        return message.reply('❌ Seul le owner peut lancer un quiz.');
-      }
-      if (!quizRunning) {
-        startQuizLoop();
-      } else {
-        await sendQuiz();
-      }
+      if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut lancer un quiz.');
+      if (!quizRunning) { startQuizLoop(); } else { await sendQuiz(); }
       return;
     }
 
     if (content === '-quizz end') {
-      if (!isOwner(message.author.id)) {
-        return message.reply('❌ Seul le owner peut arrêter le quiz.');
-      }
+      if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut arrêter le quiz.');
       await stopQuizLoop();
       await message.channel.send('🛑 Le quiz a été arrêté.');
       return;
     }
-  }
 
-  if (message.channel.id !== QUIZ_CHANNEL_ID) return;
-  if (!currentQuiz) return;
-
-  const userAnswer = normalize(message.content);
-  const correctAnswer = normalize(currentQuiz.answer);
-
-  if (userAnswer === correctAnswer) {
-    const wonQuiz = currentQuiz;
-    currentQuiz = null;
-    const elapsed = quizStartTime ? ((Date.now() - quizStartTime) / 1000).toFixed(2) : null;
-    quizStartTime = null;
-
-    if (quizTimeout) {
-      clearTimeout(quizTimeout);
-      quizTimeout = null;
+    if (content === '-qst start') {
+      if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut lancer une question.');
+      if (currentQuestion) return message.reply('❌ Une question est déjà en cours.');
+      await sendQuestion();
+      return;
     }
 
-    if (currentQuizMessage) {
-      try {
-        await currentQuizMessage.delete();
-      } catch (e) {}
-      currentQuizMessage = null;
+    // ── Mode BOSS : réponse de la joueuse ciblée ────────────
+    if (bossMode.active && message.author.id === BOSS_TARGET_ID) {
+      const userAnswer = normalize(message.content);
+      const correctBossAnswer = normalize(bossMode.question.answer);
+
+      if (userAnswer === correctBossAnswer) {
+        if (bossMode.timeoutId) clearTimeout(bossMode.timeoutId);
+        bossMode.active = false;
+        const wonQuiz = bossMode.pendingQuiz;
+        bossMode.pendingQuiz = null;
+        bossMode.question = null;
+
+        const newTotal = addPoint(message.author.id, message.author.username);
+        await updateLeaderboardEmbed();
+        if (currentQuizMessage) { try { await currentQuizMessage.delete(); } catch (e) {} currentQuizMessage = null; }
+
+        const congratsMsg = await message.channel.send(
+          `ok t'as réussi la question boss on va pas se mentir... **+1 point** (total : ${newTotal}) pour ${message.author} ! La réponse du quiz était **${wonQuiz.answer}**`
+        );
+        setTimeout(() => congratsMsg.delete().catch(() => {}), 10000);
+      } else {
+        if (bossMode.timeoutId) clearTimeout(bossMode.timeoutId);
+        const savedAnswer = bossMode.question.answer;
+        bossMode.active = false;
+        bossMode.pendingQuiz = null;
+        bossMode.question = null;
+
+        const failMsg = await message.channel.send(
+          `mauvaise réponse ${message.author} tu perds ton point la réponse était **${savedAnswer}**`
+        );
+        setTimeout(() => failMsg.delete().catch(() => {}), 10000);
+      }
+      return;
     }
 
-    const newTotal = addPoint(message.author.id, message.author.username);
-    await updateLeaderboardEmbed();
+    // ── Réponses aux questions texte ─────────────────────────
+    if (currentQuestion && message.author.id !== BOSS_TARGET_ID || currentQuestion && !bossMode.active) {
+      const userAnswer = normalize(message.content);
+      const isCorrect = currentQuestion.answers.some(a => normalize(a) === userAnswer);
 
-    const timeStr = elapsed !== null ? ` en **${elapsed}s**` : '';
-    const congratsMsg = await message.channel.send(
-      `🎉 Bravo ${message.author} d'avoir trouvé la bonne réponse${timeStr} !\nLa réponse était : **${wonQuiz.answer}** (+1 point, total : ${newTotal})`
-    );
-    setTimeout(() => congratsMsg.delete().catch(() => {}), 8000);
+      if (isCorrect) {
+        const wonQuestion = currentQuestion;
+        currentQuestion = null;
+        if (questionTimeout) { clearTimeout(questionTimeout); questionTimeout = null; }
+        if (currentQuestionMessage) { try { await currentQuestionMessage.delete(); } catch (e) {} currentQuestionMessage = null; }
+
+        const newTotal = addPoint(message.author.id, message.author.username);
+        await updateLeaderboardEmbed();
+
+        const congratsMsg = await message.channel.send(
+          `🎉 Bravo ${message.author} bonne réponse !\nLa réponse était : **${wonQuestion.answers[0]}** (+1 point, total : ${newTotal})`
+        );
+        setTimeout(() => congratsMsg.delete().catch(() => {}), 8000);
+        return;
+      }
+    }
+
+    // ── Réponses aux quiz images ──────────────────────────────
+    if (!currentQuiz) return;
+
+    const userAnswer = normalize(message.content);
+    const correctAnswer = normalize(currentQuiz.answer);
+
+    if (userAnswer === correctAnswer) {
+
+      // Mode BOSS si c'est la joueuse ciblée
+      if (message.author.id === BOSS_TARGET_ID) {
+        const wonQuiz = currentQuiz;
+        currentQuiz = null;
+        quizStartTime = null;
+        if (quizTimeout) { clearTimeout(quizTimeout); quizTimeout = null; }
+
+        const taunt = BOSS_TAUNT_MESSAGES[Math.floor(Math.random() * BOSS_TAUNT_MESSAGES.length)];
+        const bossQ = BOSS_QUESTIONS[Math.floor(Math.random() * BOSS_QUESTIONS.length)];
+
+        bossMode.active = true;
+        bossMode.pendingQuiz = wonQuiz;
+        bossMode.question = bossQ;
+
+        await message.channel.send(
+          `${taunt}\n\n${message.author} réponds en **30 secondes** !\n\n**${bossQ.question}**\n*(indice : ${bossQ.hint})*`
+        );
+
+        bossMode.timeoutId = setTimeout(async () => {
+          if (!bossMode.active) return;
+          bossMode.active = false;
+          bossMode.pendingQuiz = null;
+          bossMode.question = null;
+          const timeoutMsg = await message.channel.send(`t'as pas répondu à temps ${message.author} tu perds ton point`);
+          setTimeout(() => timeoutMsg.delete().catch(() => {}), 8000);
+        }, 30000);
+        return;
+      }
+
+      // Réponse normale
+      const wonQuiz = currentQuiz;
+      currentQuiz = null;
+      const elapsed = quizStartTime ? ((Date.now() - quizStartTime) / 1000).toFixed(2) : null;
+      quizStartTime = null;
+      if (quizTimeout) { clearTimeout(quizTimeout); quizTimeout = null; }
+      if (currentQuizMessage) { try { await currentQuizMessage.delete(); } catch (e) {} currentQuizMessage = null; }
+
+      const newTotal = addPoint(message.author.id, message.author.username);
+      await updateLeaderboardEmbed();
+
+      const timeStr = elapsed !== null ? ` en **${elapsed}s**` : '';
+      const congratsMsg = await message.channel.send(
+        `🎉 Bravo ${message.author} d'avoir trouvé la bonne réponse${timeStr} !\nLa réponse était : **${wonQuiz.answer}** (+1 point, total : ${newTotal})`
+      );
+      setTimeout(() => congratsMsg.delete().catch(() => {}), 8000);
+    }
   }
 });
 
 client.login(TOKEN);
 
-// ====== GESTIONNAIRE DES BOUTONS (BOUTIQUE) ======
+// ====== BOUTIQUE ======
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
   if (![BTN_DECO, BTN_NITRO].includes(interaction.customId)) return;
@@ -421,17 +517,13 @@ client.on('interactionCreate', async (interaction) => {
     });
   }
 
-  // On diffère la réponse pour avoir plus de temps (15 min au lieu de 3 sec)
   await interaction.deferReply({ ephemeral: true });
 
   try {
     const member = await interaction.guild.members.fetch(interaction.user.id);
-
     resetPoints(interaction.user.id);
     const remaining = stats.points - requiredPoints;
-    for (let i = 0; i < remaining; i++) {
-      addPoint(interaction.user.id, interaction.user.username);
-    }
+    for (let i = 0; i < remaining; i++) { addPoint(interaction.user.id, interaction.user.username); }
 
     const [ticket] = await Promise.all([
       createTicket(interaction.guild, member, rewardName, requiredPoints),
@@ -440,12 +532,10 @@ client.on('interactionCreate', async (interaction) => {
     ]);
 
     await interaction.editReply({
-      content: `✅ Achat validé ! **${requiredPoints} pts** ont été déduits.\n🎫 Ton ticket a été créé : ${ticket}\n⏳ Ton rôle **${rewardName}** expire dans 5 minutes.`
+      content: `✅ Achat validé ! **${requiredPoints} pts** déduits.\n🎫 Ton ticket : ${ticket}\n⏳ Ton rôle **${rewardName}** expire dans 2 heures.`
     });
   } catch (err) {
-    console.error('[SHOP] Erreur lors du traitement de l\'achat :', err);
-    await interaction.editReply({
-      content: '❌ Une erreur est survenue lors du traitement de ton achat. Contacte un admin.'
-    });
+    console.error('[SHOP] Erreur :', err);
+    await interaction.editReply({ content: '❌ Une erreur est survenue. Contacte un admin.' });
   }
 });
