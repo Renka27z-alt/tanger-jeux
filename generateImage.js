@@ -238,6 +238,98 @@ async function generateQuizImage(quiz, timeLimitMs = 60000) {
   return canvas.toBuffer('image/png');
 }
 
+// Dimensions dédiées aux questions texte (pas besoin d'une image de personnage)
+const QST_WIDTH = 800;
+const QST_HEIGHT = 500;
+
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(' ');
+  const lines = [];
+  let current = '';
+
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+async function generateQuestionImage(questionText, timeLimitMs = 60000) {
+  const canvas = createCanvas(QST_WIDTH, QST_HEIGHT);
+  const ctx = canvas.getContext('2d');
+
+  try {
+    const bgImg = await loadImageFlexible(BACKGROUND_PATH);
+    drawImageCover(ctx, bgImg, 0, 0, QST_WIDTH, QST_HEIGHT, 0.5);
+  } catch (e) {
+    drawBackground(ctx, QST_WIDTH, QST_HEIGHT);
+  }
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.fillRect(0, 0, QST_WIDTH, QST_HEIGHT);
+
+  const margin = 30;
+  const cardWidth = QST_WIDTH - margin * 2;
+
+  // ===== Carte titre =====
+  const titleH = 100;
+  drawCard(ctx, margin, margin, cardWidth, titleH);
+
+  drawQuestionMarkIcon(ctx, margin + 55, margin + titleH / 2, 26, '#ffffff');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 36px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('QUESTION', margin + 100, margin + titleH / 2 - 10);
+
+  ctx.font = 'italic 18px Arial';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.fillText(`${formatTime(timeLimitMs)} pour répondre`, margin + 100, margin + titleH / 2 + 20);
+
+  drawClockIcon(ctx, margin + cardWidth - 45, margin + titleH / 2, 24, '#e74c3c');
+
+  // ===== Carte question =====
+  const qY = margin + titleH + 20;
+  const qH = QST_HEIGHT - qY - margin;
+  drawCard(ctx, margin, qY, cardWidth, qH);
+
+  const innerPad = 50;
+  const textMaxWidth = cardWidth - innerPad * 2;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 32px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const lines = wrapText(ctx, questionText, textMaxWidth);
+  const lineHeight = 44;
+  const totalTextHeight = lines.length * lineHeight;
+  const startY = qY + qH / 2 - totalTextHeight / 2 + lineHeight / 2;
+
+  lines.forEach((line, i) => {
+    ctx.fillText(line, margin + cardWidth / 2, startY + i * lineHeight);
+  });
+
+  return canvas.toBuffer('image/png');
+}
+
+function drawQuestionMarkIcon(ctx, cx, cy, r, color) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.font = `bold ${Math.round(r * 2)}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('?', cx, cy + 2);
+  ctx.restore();
+}
+
 function formatTime(ms) {
   if (ms < 60000) return `${Math.round(ms / 1000)}s`;
   const minutes = Math.round(ms / 60000);
@@ -403,6 +495,7 @@ function roundRect(ctx, x, y, w, h, r) {
 
 module.exports = {
   generateQuizImage,
+  generateQuestionImage,
   preloadAllImages,
   downloadImageWithRetry
 };
