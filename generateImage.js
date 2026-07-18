@@ -330,6 +330,111 @@ function drawQuestionMarkIcon(ctx, cx, cy, r, color) {
   ctx.restore();
 }
 
+async function generateMixImage(letters, timeLimitMs = 60000) {
+  const canvas = createCanvas(QST_WIDTH, QST_HEIGHT);
+  const ctx = canvas.getContext('2d');
+
+  try {
+    const bgImg = await loadImageFlexible(BACKGROUND_PATH);
+    drawImageCover(ctx, bgImg, 0, 0, QST_WIDTH, QST_HEIGHT, 0.5);
+  } catch (e) {
+    drawBackground(ctx, QST_WIDTH, QST_HEIGHT);
+  }
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.fillRect(0, 0, QST_WIDTH, QST_HEIGHT);
+
+  const margin = 30;
+  const cardWidth = QST_WIDTH - margin * 2;
+
+  // ===== Carte titre =====
+  const titleH = 100;
+  drawCard(ctx, margin, margin, cardWidth, titleH);
+
+  drawShuffleIcon(ctx, margin + 55, margin + titleH / 2, 26, '#ffffff');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 32px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('MIX DE LETTRES', margin + 100, margin + titleH / 2 - 10);
+
+  ctx.font = 'italic 18px Arial';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.fillText(`${formatTime(timeLimitMs)} pour trouver le mot`, margin + 100, margin + titleH / 2 + 20);
+
+  drawClockIcon(ctx, margin + cardWidth - 45, margin + titleH / 2, 24, '#e74c3c');
+
+  // ===== Carte lettres =====
+  const lY = margin + titleH + 20;
+  const lH = QST_HEIGHT - lY - margin;
+  drawCard(ctx, margin, lY, cardWidth, lH);
+
+  const n = letters.length;
+  const gap = 14;
+  const available = cardWidth - 60;
+  const maxTileByWidth = (available - gap * (n - 1)) / n;
+  const tileSize = Math.max(40, Math.min(80, maxTileByWidth));
+  const rowWidth = n * tileSize + (n - 1) * gap;
+  const startX = margin + cardWidth / 2 - rowWidth / 2;
+  const tileY = lY + lH / 2 - tileSize / 2;
+
+  letters.forEach((letter, i) => {
+    const x = startX + i * (tileSize + gap);
+    drawLetterTile(ctx, x, tileY, tileSize, letter);
+  });
+
+  return canvas.toBuffer('image/png');
+}
+
+function drawShuffleIcon(ctx, cx, cy, r, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  const s = r * 0.8;
+
+  ctx.beginPath();
+  ctx.moveTo(cx - s, cy - s * 0.4);
+  ctx.lineTo(cx + s, cy + s * 0.4);
+  ctx.moveTo(cx - s, cy + s * 0.4);
+  ctx.lineTo(cx + s, cy - s * 0.4);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cx + s, cy + s * 0.4);
+  ctx.lineTo(cx + s - 9, cy + s * 0.4 - 7);
+  ctx.moveTo(cx + s, cy + s * 0.4);
+  ctx.lineTo(cx + s - 9, cy + s * 0.4 + 7);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cx + s, cy - s * 0.4);
+  ctx.lineTo(cx + s - 9, cy - s * 0.4 - 7);
+  ctx.moveTo(cx + s, cy - s * 0.4);
+  ctx.lineTo(cx + s - 9, cy - s * 0.4 + 7);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawLetterTile(ctx, x, y, size, letter) {
+  ctx.save();
+  roundRect(ctx, x, y, size, size, 12);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255, 150, 200, 0.9)';
+  ctx.stroke();
+
+  ctx.fillStyle = '#3c1e5a';
+  ctx.font = `bold ${Math.round(size * 0.55)}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(letter.toUpperCase(), x + size / 2, y + size / 2 + 2);
+  ctx.restore();
+}
+
 function formatTime(ms) {
   if (ms < 60000) return `${Math.round(ms / 1000)}s`;
   const minutes = Math.round(ms / 60000);
@@ -496,6 +601,7 @@ function roundRect(ctx, x, y, w, h, r) {
 module.exports = {
   generateQuizImage,
   generateQuestionImage,
+  generateMixImage,
   preloadAllImages,
   downloadImageWithRetry
 };
