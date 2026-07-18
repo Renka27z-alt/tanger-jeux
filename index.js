@@ -3,8 +3,10 @@ process.env.TZ = 'Europe/Paris';
 const { Client, GatewayIntentBits, AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const { generateQuizImage, preloadAllImages } = require('./generateImage');
 const { generateQuestionImage } = require('./generateImage');
+const { generateMixImage } = require('./generateImage');
 let quizzes = require('./quizzes.json');
 const { QUESTIONS } = require('./questions');
+const { MIX_WORDS } = require('./mixWords');
 const { addPoint, addPoints, removePoints, getUserStats, resetPoints } = require('./points');
 const { buildLeaderboardEmbed } = require('./leaderboard');
 const {
@@ -16,7 +18,7 @@ const {
 
 // ====== CONFIGURATION ======
 const TOKEN = process.env.TOKEN;
-const OWNER_IDS = ['1289174457973211148', '1127748076120055890']; // ← tes 2 IDs owner
+const OWNER_IDS = ['1289174457973211148', '320703657446211594']; // ← tes 2 IDs owner
 const QUIZ_CHANNEL_ID = '1519420268219596930';
 const LEADERBOARD_CHANNEL_ID = '1521251618119483532';
 const ANSWER_TIME_LIMIT = 60 * 1000;
@@ -71,6 +73,13 @@ let questionTimeout = null;
 let usedQuestionIndexes = [];
 // ==================================
 
+// ====== MIX DE LETTRES ======
+let currentMix = null;
+let currentMixMessage = null;
+let mixTimeout = null;
+let usedMixIndexes = [];
+// =============================
+
 function isOwner(userId) {
   return OWNER_IDS.includes(userId);
 }
@@ -101,6 +110,34 @@ function pickQuestion() {
   } while (usedQuestionIndexes.includes(index));
   usedQuestionIndexes.push(index);
   return QUESTIONS[index];
+}
+
+function pickMixWord() {
+  if (usedMixIndexes.length >= MIX_WORDS.length) usedMixIndexes = [];
+  let index;
+  do {
+    index = Math.floor(Math.random() * MIX_WORDS.length);
+  } while (usedMixIndexes.includes(index));
+  usedMixIndexes.push(index);
+  return MIX_WORDS[index];
+}
+
+function scrambleWord(word) {
+  const letters = word.toUpperCase().split('');
+  if (letters.length <= 1) return letters;
+
+  let shuffled;
+  let attempts = 0;
+  do {
+    shuffled = [...letters];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    attempts++;
+  } while (shuffled.join('') === letters.join('') && attempts < 20);
+
+  return shuffled;
 }
 
 function msUntilNextQuarter() {
@@ -207,6 +244,53 @@ async function revealQuestion(channel) {
   questionTimeout = null;
 }
 
+async function sendMix() {
+  try {
+    const channel = await client.channels.fetch(QUIZ_CHANNEL_ID);
+    if (mixTimeout) { clearTimeout(mixTimeout); mixTimeout = null; }
+    if (currentMixMessage) { try { await currentMixMessage.delete(); } catch (e) {} }
+
+    const entry = pickMixWord();
+    const scrambled = scrambleWord(entry.word);
+    currentMix = { word: entry.word, scrambled };
+
+    // Génère une image avec les lettres mélangées sur le fond background
+    let buffer;
+    try {
+      buffer = await generateMixImage(scrambled, ANSWER_TIME_LIMIT);
+    } catch (e) {
+      // Si generateMixImage n'existe pas encore, envoie en texte simple
+      currentMixMessage = await channel.send(
+        `🔤 **MIX DE LETTRES** *(60 secondes pour répondre)*\n\n**${scrambled.join(' ')}**`
+      );
+      mixTimeout = setTimeout(() => revealMix(channel), ANSWER_TIME_LIMIT);
+      return;
+    }
+
+    const attachment = new AttachmentBuilder(buffer, { name: 'mix.png' });
+    currentMixMessage = await channel.send({ files: [attachment] });
+    console.log(`[MIX] Mot envoyé : ${entry.word} → ${scrambled.join('')}`);
+    mixTimeout = setTimeout(() => revealMix(channel), ANSWER_TIME_LIMIT);
+  } catch (err) {
+    console.error('[MIX] Erreur envoi :', err);
+  }
+}
+
+async function revealMix(channel) {
+  if (!currentMix) return;
+  const answer = currentMix.word;
+  if (currentMixMessage) {
+    try { await currentMixMessage.delete(); } catch (e) {}
+    currentMixMessage = null;
+  }
+  try {
+    const revealMsg = await channel.send(`⏰ Temps écoulé ! Le mot était : **${answer}**`);
+    setTimeout(() => revealMsg.delete().catch(() => {}), 10000);
+  } catch (e) {}
+  currentMix = null;
+  mixTimeout = null;
+}
+
 function scheduleNextQuiz() {
   if (!quizRunning) return;
   const delay = msUntilNextQuarter();
@@ -296,6 +380,7 @@ client.on('messageCreate', async (message) => {
         { name: '-quizz start', value: 'Lance un quiz image (owner).' },
         { name: '-quizz end', value: 'Arrête le quiz (owner).' },
         { name: '-qst start', value: 'Lance une question texte (owner).' },
+        { name: '-mix start', value: 'Lance un mix de lettres à retrouver (owner).' },
         { name: '-addpoint @membre [montant]', value: 'Ajoute des points (owner).' },
         { name: '-removepoint @membre [montant]', value: 'Retire des points (owner).' },
         { name: '-resetpoint @membre', value: 'Remet les points à 0 (owner).' },
@@ -383,6 +468,13 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    if (content === '-mix start') {
+      if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut lancer un mix de lettres.');
+      if (currentMix) return message.reply('❌ Un mix de lettres est déjà en cours.');
+      await sendMix();
+      return;
+    }
+
     // ── Mode BOSS : réponse de la joueuse ciblée ────────────
     if (bossMode.active && message.author.id === BOSS_TARGET_ID) {
       const userAnswer = normalize(message.content);
@@ -434,6 +526,28 @@ client.on('messageCreate', async (message) => {
 
         const congratsMsg = await message.channel.send(
           `🎉 Bravo ${message.author} bonne réponse !\nLa réponse était : **${wonQuestion.answers[0]}** (+1 point, total : ${newTotal})`
+        );
+        setTimeout(() => congratsMsg.delete().catch(() => {}), 8000);
+        return;
+      }
+    }
+
+    // ── Réponses au mix de lettres ────────────────────────────
+    if (currentMix) {
+      const userAnswer = normalize(message.content);
+      const correctAnswer = normalize(currentMix.word);
+
+      if (userAnswer === correctAnswer) {
+        const wonWord = currentMix.word;
+        currentMix = null;
+        if (mixTimeout) { clearTimeout(mixTimeout); mixTimeout = null; }
+        if (currentMixMessage) { try { await currentMixMessage.delete(); } catch (e) {} currentMixMessage = null; }
+
+        const newTotal = addPoint(message.author.id, message.author.username);
+        await updateLeaderboardEmbed();
+
+        const congratsMsg = await message.channel.send(
+          `🎉 Bravo ${message.author} tu as trouvé le mot !\nLe mot était : **${wonWord}** (+1 point, total : ${newTotal})`
         );
         setTimeout(() => congratsMsg.delete().catch(() => {}), 8000);
         return;
