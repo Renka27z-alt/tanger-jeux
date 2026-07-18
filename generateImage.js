@@ -435,6 +435,83 @@ function drawLetterTile(ctx, x, y, size, letter) {
   ctx.restore();
 }
 
+async function generateCalcImage(a, b, op, timeLimitMs = 60000) {
+  const canvas = createCanvas(QST_WIDTH, QST_HEIGHT);
+  const ctx = canvas.getContext('2d');
+
+  try {
+    const bgImg = await loadImageFlexible(BACKGROUND_PATH);
+    drawImageCover(ctx, bgImg, 0, 0, QST_WIDTH, QST_HEIGHT, 0.5);
+  } catch (e) {
+    drawBackground(ctx, QST_WIDTH, QST_HEIGHT);
+  }
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.fillRect(0, 0, QST_WIDTH, QST_HEIGHT);
+
+  const margin = 30;
+  const cardWidth = QST_WIDTH - margin * 2;
+
+  // ===== Carte titre =====
+  const titleH = 100;
+  drawCard(ctx, margin, margin, cardWidth, titleH);
+
+  drawCalculatorIcon(ctx, margin + 55, margin + titleH / 2, 26, '#ffffff');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 34px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('CALCUL MENTAL', margin + 100, margin + titleH / 2 - 10);
+
+  ctx.font = 'italic 18px Arial';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.fillText(`${formatTime(timeLimitMs)} pour donner le résultat`, margin + 100, margin + titleH / 2 + 20);
+
+  drawClockIcon(ctx, margin + cardWidth - 45, margin + titleH / 2, 24, '#e74c3c');
+
+  // ===== Carte calcul =====
+  const cY = margin + titleH + 20;
+  const cH = QST_HEIGHT - cY - margin;
+  drawCard(ctx, margin, cY, cardWidth, cH);
+
+  const opSymbol = op === '+' ? '+' : op === '-' ? '−' : '×';
+  const text = `${a} ${opSymbol} ${b}`;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 90px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, margin + cardWidth / 2, cY + cH / 2);
+
+  return canvas.toBuffer('image/png');
+}
+
+function drawCalculatorIcon(ctx, cx, cy, r, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  const s = r * 0.9;
+
+  roundRect(ctx, cx - s, cy - s, s * 2, s * 2, 6);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.6, cy - s * 0.4);
+  ctx.lineTo(cx + s * 0.6, cy - s * 0.4);
+  ctx.stroke();
+
+  ctx.fillStyle = color;
+  const dots = [[-0.5, 0.1], [0, 0.1], [0.5, 0.1], [-0.5, 0.55], [0, 0.55], [0.5, 0.55]];
+  dots.forEach(([dx, dy]) => {
+    ctx.beginPath();
+    ctx.arc(cx + dx * s, cy + dy * s, s * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.restore();
+}
+
 function formatTime(ms) {
   if (ms < 60000) return `${Math.round(ms / 1000)}s`;
   const minutes = Math.round(ms / 60000);
@@ -602,6 +679,7 @@ module.exports = {
   generateQuizImage,
   generateQuestionImage,
   generateMixImage,
+  generateCalcImage,
   preloadAllImages,
   downloadImageWithRetry
 };
