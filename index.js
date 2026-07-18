@@ -4,6 +4,7 @@ const { Client, GatewayIntentBits, AttachmentBuilder, EmbedBuilder } = require('
 const { generateQuizImage, preloadAllImages } = require('./generateImage');
 const { generateQuestionImage } = require('./generateImage');
 const { generateMixImage } = require('./generateImage');
+const { generateCalcImage } = require('./generateImage');
 let quizzes = require('./quizzes.json');
 const { QUESTIONS } = require('./questions');
 const { MIX_WORDS } = require('./mixWords');
@@ -18,7 +19,7 @@ const {
 
 // ====== CONFIGURATION ======
 const TOKEN = process.env.TOKEN;
-const OWNER_IDS = ['1289174457973211148', '320703657446211594']; // ← tes 2 IDs owner
+const OWNER_IDS = ['1289174457973211148', '1127748076120055890']; // ← tes 2 IDs owner
 const QUIZ_CHANNEL_ID = '1519420268219596930';
 const LEADERBOARD_CHANNEL_ID = '1521251618119483532';
 const ANSWER_TIME_LIMIT = 60 * 1000;
@@ -80,6 +81,12 @@ let mixTimeout = null;
 let usedMixIndexes = [];
 // =============================
 
+// ====== CALCUL MENTAL ======
+let currentCalc = null;
+let currentCalcMessage = null;
+let calcTimeout = null;
+// ============================
+
 function isOwner(userId) {
   return OWNER_IDS.includes(userId);
 }
@@ -138,6 +145,32 @@ function scrambleWord(word) {
   } while (shuffled.join('') === letters.join('') && attempts < 20);
 
   return shuffled;
+}
+
+function randInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function generateCalcProblem() {
+  const ops = ['+', '-', '*'];
+  const op = ops[Math.floor(Math.random() * ops.length)];
+
+  let a, b, answer;
+  if (op === '+') {
+    a = randInt(10, 90);
+    b = randInt(10, 90);
+    answer = a + b;
+  } else if (op === '-') {
+    a = randInt(20, 99);
+    b = randInt(1, a);
+    answer = a - b;
+  } else {
+    a = randInt(2, 12);
+    b = randInt(2, 12);
+    answer = a * b;
+  }
+
+  return { a, b, op, answer };
 }
 
 function msUntilNextQuarter() {
@@ -291,6 +324,53 @@ async function revealMix(channel) {
   mixTimeout = null;
 }
 
+async function sendCalc() {
+  try {
+    const channel = await client.channels.fetch(QUIZ_CHANNEL_ID);
+    if (calcTimeout) { clearTimeout(calcTimeout); calcTimeout = null; }
+    if (currentCalcMessage) { try { await currentCalcMessage.delete(); } catch (e) {} }
+
+    const problem = generateCalcProblem();
+    currentCalc = problem;
+
+    // Génère une image avec le calcul écrit dessus sur le fond background
+    let buffer;
+    try {
+      buffer = await generateCalcImage(problem.a, problem.b, problem.op, ANSWER_TIME_LIMIT);
+    } catch (e) {
+      // Si generateCalcImage n'existe pas encore, envoie en texte simple
+      const opSymbol = problem.op === '+' ? '+' : problem.op === '-' ? '−' : '×';
+      currentCalcMessage = await channel.send(
+        `🧮 **CALCUL MENTAL** *(60 secondes pour répondre)*\n\n**${problem.a} ${opSymbol} ${problem.b}**`
+      );
+      calcTimeout = setTimeout(() => revealCalc(channel), ANSWER_TIME_LIMIT);
+      return;
+    }
+
+    const attachment = new AttachmentBuilder(buffer, { name: 'calc.png' });
+    currentCalcMessage = await channel.send({ files: [attachment] });
+    console.log(`[CALC] Calcul envoyé : ${problem.a} ${problem.op} ${problem.b} = ${problem.answer}`);
+    calcTimeout = setTimeout(() => revealCalc(channel), ANSWER_TIME_LIMIT);
+  } catch (err) {
+    console.error('[CALC] Erreur envoi :', err);
+  }
+}
+
+async function revealCalc(channel) {
+  if (!currentCalc) return;
+  const answer = currentCalc.answer;
+  if (currentCalcMessage) {
+    try { await currentCalcMessage.delete(); } catch (e) {}
+    currentCalcMessage = null;
+  }
+  try {
+    const revealMsg = await channel.send(`⏰ Temps écoulé ! Le résultat était : **${answer}**`);
+    setTimeout(() => revealMsg.delete().catch(() => {}), 10000);
+  } catch (e) {}
+  currentCalc = null;
+  calcTimeout = null;
+}
+
 function scheduleNextQuiz() {
   if (!quizRunning) return;
   const delay = msUntilNextQuarter();
@@ -369,25 +449,42 @@ client.on('messageCreate', async (message) => {
   }
 
   if (content === '-help') {
+    const PUBLIC_COMMANDS = [
+      { name: '-top', value: 'Affiche le classement.' },
+      { name: '-pointuser', value: 'Affiche tes points.' },
+      { name: '-pointuser @membre', value: 'Affiche les points d\'un membre.' },
+      { name: '-help', value: 'Affiche ce message.' }
+    ];
+
+    const OWNER_COMMANDS = [
+      { name: '-boutique', value: 'Poste la boutique.' },
+      { name: '-quizz start', value: 'Lance un quiz image.' },
+      { name: '-quizz end', value: 'Arrête le quiz.' },
+      { name: '-qst start', value: 'Lance une question texte.' },
+      { name: '-mix start', value: 'Lance un mix de lettres à retrouver.' },
+      { name: '-calc start', value: 'Lance un calcul mental.' },
+      { name: '-addpoint @membre [montant]', value: 'Ajoute des points.' },
+      { name: '-removepoint @membre [montant]', value: 'Retire des points.' },
+      { name: '-resetpoint @membre', value: 'Remet les points à 0.' },
+      { name: '-close', value: 'Ferme un ticket.' }
+    ];
+
     const embed = new EmbedBuilder()
       .setTitle('📖 Liste des commandes')
       .setColor('#9b59b6')
-      .addFields(
-        { name: '-top', value: 'Affiche le classement.' },
-        { name: '-pointuser', value: 'Affiche tes points.' },
-        { name: '-pointuser @membre', value: 'Affiche les points d\'un membre.' },
-        { name: '-boutique', value: 'Poste la boutique (owner).' },
-        { name: '-quizz start', value: 'Lance un quiz image (owner).' },
-        { name: '-quizz end', value: 'Arrête le quiz (owner).' },
-        { name: '-qst start', value: 'Lance une question texte (owner).' },
-        { name: '-mix start', value: 'Lance un mix de lettres à retrouver (owner).' },
-        { name: '-addpoint @membre [montant]', value: 'Ajoute des points (owner).' },
-        { name: '-removepoint @membre [montant]', value: 'Retire des points (owner).' },
-        { name: '-resetpoint @membre', value: 'Remet les points à 0 (owner).' },
-        { name: '-close', value: 'Ferme un ticket (owner).' },
-        { name: '-help', value: 'Affiche ce message.' }
-      )
       .setTimestamp();
+
+    if (isOwner(message.author.id)) {
+      embed.addFields(
+        { name: '🌍 Commandes publiques', value: '\u200b' },
+        ...PUBLIC_COMMANDS,
+        { name: '👑 Commandes owner', value: '\u200b' },
+        ...OWNER_COMMANDS
+      );
+    } else {
+      embed.addFields(...PUBLIC_COMMANDS);
+    }
+
     await message.channel.send({ embeds: [embed] });
     return;
   }
@@ -475,6 +572,13 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    if (content === '-calc start') {
+      if (!isOwner(message.author.id)) return message.reply('❌ Seul le owner peut lancer un calcul mental.');
+      if (currentCalc) return message.reply('❌ Un calcul est déjà en cours.');
+      await sendCalc();
+      return;
+    }
+
     // ── Mode BOSS : réponse de la joueuse ciblée ────────────
     if (bossMode.active && message.author.id === BOSS_TARGET_ID) {
       const userAnswer = normalize(message.content);
@@ -548,6 +652,27 @@ client.on('messageCreate', async (message) => {
 
         const congratsMsg = await message.channel.send(
           `🎉 Bravo ${message.author} tu as trouvé le mot !\nLe mot était : **${wonWord}** (+1 point, total : ${newTotal})`
+        );
+        setTimeout(() => congratsMsg.delete().catch(() => {}), 8000);
+        return;
+      }
+    }
+
+    // ── Réponses au calcul mental ─────────────────────────────
+    if (currentCalc) {
+      const userNumber = parseInt(message.content.trim(), 10);
+
+      if (!isNaN(userNumber) && userNumber === currentCalc.answer) {
+        const wonAnswer = currentCalc.answer;
+        currentCalc = null;
+        if (calcTimeout) { clearTimeout(calcTimeout); calcTimeout = null; }
+        if (currentCalcMessage) { try { await currentCalcMessage.delete(); } catch (e) {} currentCalcMessage = null; }
+
+        const newTotal = addPoint(message.author.id, message.author.username);
+        await updateLeaderboardEmbed();
+
+        const congratsMsg = await message.channel.send(
+          `🎉 Bravo ${message.author} bon calcul !\nLe résultat était : **${wonAnswer}** (+1 point, total : ${newTotal})`
         );
         setTimeout(() => congratsMsg.delete().catch(() => {}), 8000);
         return;
